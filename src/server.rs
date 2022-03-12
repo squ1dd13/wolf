@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    io::Write,
     net::{SocketAddr, TcpStream},
     ops::DerefMut,
 };
@@ -28,6 +29,21 @@ fn run_server(addr: SocketAddr) {
             Ok(stream) => {
                 // Add a new player for the stream.
                 game.add_player(Player::new(stream));
+                std::io::stdout().flush().unwrap();
+
+                std::thread::sleep(std::time::Duration::from_millis(500));
+
+                print!("Do you wish to start the game? y/n: ");
+                std::io::stdout().flush().unwrap();
+
+                let mut buf = String::new();
+                std::io::stdin().read_line(&mut buf).unwrap();
+
+                if buf.starts_with('y') {
+                    break;
+                }
+
+                println!("Waiting for more players...");
             }
             Err(err) => {
                 eprintln!("Failed to connect to incoming stream: {}", err);
