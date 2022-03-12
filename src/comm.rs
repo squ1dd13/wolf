@@ -16,7 +16,8 @@ pub enum Winner {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub enum CtsMessage {
-    Text(String),
+    /// The player's name. This should be sent immediately after a connection is made.
+    Name(String),
 
     /// A vote against the player with the given index in the voting options that were sent to the
     /// player.
@@ -57,4 +58,7 @@ pub enum StcMessage {
 
     /// A side has won the game.
     AnnounceWinner(Winner),
+
+    /// The host is waiting for a player to vote.
+    WaitingFor(String),
 }
