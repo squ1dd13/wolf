@@ -1,6 +1,5 @@
 [package]
 name = "wolf"
-author = "squ1dd13"
 version = "0.1.0"
 edition = "2021"
 

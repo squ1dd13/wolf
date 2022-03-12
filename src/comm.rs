@@ -25,6 +25,10 @@ pub enum CtsMessage {
 
     /// A wolf's chosen victim. The number is an index in the list of names they were sent.
     Kill(usize),
+
+    /// Acknowledges receipt of a message from the server. The server should wait to receive this
+    /// before sending any more messages to ensure that everything is sent in order.
+    Received,
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]

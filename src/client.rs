@@ -55,17 +55,16 @@ All of the werewolves have been killed."#
     }
 
     /// Does something with the given message from the host.
-    ///
-    /// This may or may not involve sending a message back to the host - in a lot of cases, there
-    /// is no need to respond.
     fn handle_message(&mut self, msg: StcMessage) -> Option<Winner> {
         match msg {
             StcMessage::WolvesWake => {
                 println!("The wolves wake.");
+                self.send_ack();
             }
 
             StcMessage::NightFalls => {
                 println!("Night has fallen.");
+                self.send_ack();
             }
 
             StcMessage::Died(name) => {
@@ -75,6 +74,8 @@ All of the werewolves have been killed."#
                 } else {
                     println!("{} was killed last night.", name);
                 }
+
+                self.send_ack();
             }
 
             StcMessage::VoteOptions(opts) => {
@@ -89,10 +90,12 @@ All of the werewolves have been killed."#
 
             StcMessage::AnnounceVote(name, against) => {
                 println!("{} voted against {}.", name, against);
+                self.send_ack();
             }
 
             StcMessage::NoMajority => {
                 println!("There was no majority vote.");
+                self.send_ack();
             }
 
             StcMessage::VotedOut(name) => {
@@ -102,6 +105,8 @@ All of the werewolves have been killed."#
                 } else {
                     println!("{} was voted out by the other players.", name);
                 }
+
+                self.send_ack();
             }
 
             StcMessage::RoleAssigned(role) => {
@@ -117,6 +122,7 @@ All of the werewolves have been killed."#
                 };
 
                 println!("Your role is {}. {}", role_name, desc);
+                self.send_ack();
             }
 
             StcMessage::AnnounceWinner(winner) => return Some(winner),
@@ -127,14 +133,22 @@ All of the werewolves have been killed."#
                 } else {
                     println!("Waiting for {} to vote.", name);
                 }
+
+                self.send_ack();
             }
 
             StcMessage::AnnounceJoin(name) => {
                 println!("{} joined the game.", name);
+                self.send_ack();
             }
         }
 
         None
+    }
+
+    /// Sends the `Received` message to the host.
+    fn send_ack(&mut self) {
+        self.send(CtsMessage::Received);
     }
 
     /// Sends the given message to the host.

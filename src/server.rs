@@ -90,14 +90,11 @@ impl Player {
     }
 
     /// Sends a message to the client.
-    fn send(&self, msg: &StcMessage) {
+    fn send(&self, msg: &StcMessage) -> CtsMessage {
         let mut stream = self.stream.lock();
         bincode::serialize_into(stream.deref_mut(), &msg).unwrap();
-    }
 
-    /// Receives a message from the client.
-    fn receive(&self) -> CtsMessage {
-        let mut stream = self.stream.lock();
+        // Every message sent from the host should prompt a response from the client.
         bincode::deserialize_from(stream.deref_mut()).unwrap()
     }
 
@@ -183,10 +180,9 @@ impl Game {
 
         // Send the wolf the list of players that they can kill. This should trigger their client
         // to ask them for and send back their choice of player.
-        wolf.send(&StcMessage::KillOptions(kill_names.clone()));
+        let response = wolf.send(&StcMessage::KillOptions(kill_names.clone()));
 
-        // Wait for the player's client to send back their choice of victim.
-        let kill_num = match wolf.receive() {
+        let kill_num = match response {
             CtsMessage::Kill(num) => num,
             msg => {
                 // We shouldn't get anything else here, so panic if we do.
@@ -236,11 +232,6 @@ impl Game {
         // iterator.
         let living: Vec<&Player> = living.collect();
 
-        // Send the names to every living player to allow their client to let them vote.
-        for player in &living {
-            player.send(&StcMessage::VoteOptions(vote_names.clone()));
-        }
-
         // We don't want to allow a player to vote multiple times, so store votes in a hashmap to
         // ensure that there is only one vote per player ID.
         let mut votes = HashMap::<String, usize>::new();
@@ -249,7 +240,9 @@ impl Game {
             // Say who we're waiting for so players can tell others that they need to vote.
             self.send_all(&StcMessage::WaitingFor(player.name.clone()));
 
-            match player.receive() {
+            let response = player.send(&StcMessage::VoteOptions(vote_names.clone()));
+
+            match response {
                 CtsMessage::Vote(vote) => {
                     // Tell all the players about the vote.
                     self.send_all(&StcMessage::AnnounceVote(
