@@ -27,8 +27,6 @@ fn run_server(addr: SocketAddr) {
             Ok(stream) => {
                 // Add a new player for the stream.
                 game.players.push(Player::new(stream));
-                // println!("Connected to: {}", stream.peer_addr().unwrap());
-                // std::thread::spawn(move || handle_stream(stream));
             }
             Err(err) => {
                 eprintln!("Failed to connect to incoming stream: {}", err);
