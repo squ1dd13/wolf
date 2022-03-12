@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use crate::comm::{CtsMessage, StcMessage};
+use crate::comm::{CtsMessage, Role, StcMessage, Winner};
 
 pub fn start(port: u16) -> SocketAddr {
     let addr = SocketAddr::new(local_ip_address::local_ip().unwrap(), port);
@@ -54,18 +54,6 @@ fn handle_stream(mut stream: std::net::TcpStream) {
         let response_bytes = bincode::serialize(&crate::comm::StcMessage::WolvesWake).unwrap();
         let _ = stream.write(&response_bytes[..]).unwrap();
     }
-}
-
-/// The role of a player in the game.
-enum Role {
-    Wolf,
-    Villager,
-}
-
-/// The side that won when the game is over.
-enum Winner {
-    Wolf,
-    Village,
 }
 
 /// A player in the game.

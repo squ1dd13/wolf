@@ -1,5 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+/// The role of a player in the game.
+pub enum Role {
+    Wolf,
+    Villager,
+}
+
+/// The side that won when the game is over.
+pub enum Winner {
+    Wolf,
+    Village,
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub enum CtsMessage {
     Text(String),
