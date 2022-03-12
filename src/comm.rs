@@ -61,4 +61,7 @@ pub enum StcMessage {
 
     /// The host is waiting for a player to vote.
     WaitingFor(String),
+
+    /// The name of a player who just joined the game.
+    AnnounceJoin(String),
 }

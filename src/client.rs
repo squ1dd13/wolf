@@ -128,6 +128,10 @@ All of the werewolves have been killed."#
                     println!("Waiting for {} to vote.", name);
                 }
             }
+
+            StcMessage::AnnounceJoin(name) => {
+                println!("{} joined the game.", name);
+            }
         }
 
         None

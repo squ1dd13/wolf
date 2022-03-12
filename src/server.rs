@@ -27,7 +27,7 @@ fn run_server(addr: SocketAddr) {
         match stream {
             Ok(stream) => {
                 // Add a new player for the stream.
-                game.players.push(Player::new(stream));
+                game.add_player(Player::new(stream));
             }
             Err(err) => {
                 eprintln!("Failed to connect to incoming stream: {}", err);
@@ -35,6 +35,8 @@ fn run_server(addr: SocketAddr) {
             }
         }
     }
+
+    game.play();
 }
 
 /// A player in the game.
@@ -107,6 +109,12 @@ impl Game {
                 break;
             }
         }
+    }
+
+    /// Adds the given player to the game after announcing that they are joining.
+    fn add_player(&mut self, player: Player) {
+        self.send_all(&StcMessage::AnnounceJoin(player.name.clone()));
+        self.players.push(player);
     }
 
     /// Assigns a random role to each player.
