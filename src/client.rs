@@ -120,7 +120,7 @@ All of the werewolves have been killed."#
 
             StcMessage::WaitingFor(name) => {
                 if name == self.name {
-                    println!("It's your turn to vote. The other players are waiting for you.");
+                    println!("It's your turn to vote.");
                 } else {
                     println!("Waiting for {} to vote.", name);
                 }
