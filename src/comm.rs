@@ -54,4 +54,7 @@ pub enum StcMessage {
 
     /// The role assigned to the recipient player.
     RoleAssigned(Role),
+
+    /// A side has won the game.
+    AnnounceWinner(Winner),
 }

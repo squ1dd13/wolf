@@ -84,7 +84,12 @@ impl Game {
     fn play(&mut self) {
         loop {
             let killed_name = self.play_night();
-            self.play_day(killed_name);
+
+            // Play one day, and if either side wins, report that and end the game.
+            if let Some(winning_side) = self.play_day(killed_name) {
+                self.send_all(StcMessage::AnnounceWinner(winning_side));
+                break;
+            }
         }
     }
 

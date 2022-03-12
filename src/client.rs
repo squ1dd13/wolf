@@ -1,6 +1,6 @@
 use std::{io::Write, net::SocketAddr};
 
-use crate::comm::{CtsMessage, Role, StcMessage};
+use crate::comm::{CtsMessage, Role, StcMessage, Winner};
 
 pub fn start(addr: SocketAddr) {
     let mut stream = std::net::TcpStream::connect(addr).unwrap();
@@ -33,7 +33,21 @@ impl Player {
     fn play(&mut self) {
         loop {
             let msg = bincode::deserialize_from(&mut self.stream).unwrap();
-            self.handle_message(msg);
+
+            if let Some(winner) = self.handle_message(msg) {
+                match winner {
+                    Winner::Wolf => println!(
+                        r#"The werewolves win.
+The number of villagers remaining is equal to the number of werewolves."#
+                    ),
+                    Winner::Village => println!(
+                        r#"The villagers win.
+All of the werewolves have been killed."#
+                    ),
+                }
+
+                break;
+            }
         }
     }
 
@@ -41,7 +55,7 @@ impl Player {
     ///
     /// This may or may not involve sending a message back to the host - in a lot of cases, there
     /// is no need to respond.
-    fn handle_message(&mut self, msg: StcMessage) {
+    fn handle_message(&mut self, msg: StcMessage) -> Option<Winner> {
         match msg {
             StcMessage::WolvesWake => {
                 println!("The wolves wake.");
@@ -101,7 +115,11 @@ impl Player {
 
                 println!("Your role is {}. {}", role_name, desc);
             }
+
+            StcMessage::AnnounceWinner(winner) => return Some(winner),
         }
+
+        None
     }
 
     /// Sends the given message to the host.
