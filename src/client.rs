@@ -157,6 +157,19 @@ All of the werewolves have been killed."#
 
     /// Gets a valid player name from the user.
     fn input_name() -> String {
-        todo!()
+        let mut name = String::new();
+
+        loop {
+            std::io::stdin().read_line(&mut name).unwrap();
+
+            let trimmed = name.trim();
+
+            if trimmed.is_empty() {
+                name.clear();
+                continue;
+            }
+
+            break trimmed.to_string();
+        }
     }
 }
