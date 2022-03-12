@@ -150,6 +150,7 @@ All of the werewolves have been killed."#
 
             println!();
             print!("{} (1 to {}): ", prompt.as_ref(), opts.len());
+            std::io::stdout().flush().unwrap();
 
             std::io::stdin().read_line(&mut line).unwrap();
 
@@ -186,6 +187,7 @@ All of the werewolves have been killed."#
 
         loop {
             print!("Please enter your name: ");
+            std::io::stdout().flush().unwrap();
             std::io::stdin().read_line(&mut name).unwrap();
 
             let trimmed = name.trim();
