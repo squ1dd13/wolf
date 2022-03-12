@@ -5,6 +5,7 @@ use std::{
 };
 
 use parking_lot::Mutex;
+use rand::Rng;
 
 use crate::comm::{CtsMessage, Role, StcMessage, Winner};
 
@@ -49,7 +50,7 @@ struct Player {
     name: String,
 
     /// The player's role.
-    role: Role,
+    role: Option<Role>,
 }
 
 impl Player {
@@ -66,7 +67,7 @@ impl Player {
             stream: Mutex::new(stream),
             dead: false,
             name,
-            role: todo!(),
+            role: None,
         }
     }
 
@@ -81,6 +82,11 @@ impl Player {
         let mut stream = self.stream.lock();
         bincode::deserialize_from(stream.deref_mut()).unwrap()
     }
+
+    /// Returns the player's role. Panics if the role has not been assigned yet.
+    fn role(&self) -> Role {
+        self.role.unwrap()
+    }
 }
 
 struct Game {
@@ -90,6 +96,8 @@ struct Game {
 
 impl Game {
     fn play(&mut self) {
+        self.assign_roles();
+
         loop {
             let killed_name = self.play_night();
 
@@ -98,6 +106,27 @@ impl Game {
                 self.send_all(&StcMessage::AnnounceWinner(winning_side));
                 break;
             }
+        }
+    }
+
+    /// Assigns a random role to each player.
+    fn assign_roles(&mut self) {
+        let mut rng = rand::thread_rng();
+
+        // Pick a wolf. Once we've done that, we know the rest of the players are villagers.
+        // This will have to change when we add support for multiple wolves, but for now this is
+        // fine.
+        let wolf_index = rng.gen_range(0..self.players.len());
+
+        for i in 0..self.players.len() {
+            let role = if i == wolf_index {
+                Role::Wolf
+            } else {
+                Role::Villager
+            };
+
+            self.players[wolf_index].role = Some(role);
+            self.players[wolf_index].send(&StcMessage::RoleAssigned(role));
         }
     }
 
@@ -114,14 +143,14 @@ impl Game {
         let wolf = self
             .players
             .iter()
-            .find(|p| matches!(p.role, Role::Wolf))
+            .find(|p| matches!(p.role(), Role::Wolf))
             .unwrap();
 
         // Find the non-wolf players. These are the players that can be killed by the wolf.
         let kill_names: Vec<String> = self
             .players
             .iter()
-            .filter_map(|p| match p.role {
+            .filter_map(|p| match p.role() {
                 Role::Wolf => None,
                 _ if !p.dead => Some(p.name.clone()),
                 _ => None,
@@ -145,7 +174,7 @@ impl Game {
         let player_killed = self
             .players
             .iter_mut()
-            .filter(|p| !matches!(p.role, Role::Wolf))
+            .filter(|p| !matches!(p.role(), Role::Wolf))
             .nth(kill_num)
             .unwrap();
 
@@ -243,7 +272,7 @@ impl Game {
             // Kill them.
             voted.dead = true;
 
-            if let Role::Wolf = voted.role {
+            if let Role::Wolf = voted.role() {
                 // The village wins, because the wolf was killed.
                 return Some(Winner::Village);
             } else if living_mut.len() == 2 {
