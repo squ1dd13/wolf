@@ -320,25 +320,3 @@ impl Game {
         }
     }
 }
-
-/*
-
-    Host starts program
-    Other players connect, giving a name
-    Host starts game
-    Players allocated roles
-
-    Night falls
-    Werewolf asked who they wish to kill
-    Werewolf enters a number from a list of valid targets
-    Game kills specified target
-
-    Daytime
-    Players told who died
-    (Maybe add chat functionality, but not now as VC/IRL is much better)
-    Each living player allowed to vote for any living player (including themselves)
-    Everyone can see who votes for who
-    If werewolf voted out, game ends
-    Otherwise, back to night
-
-*/

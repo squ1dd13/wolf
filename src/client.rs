@@ -158,7 +158,7 @@ All of the werewolves have been killed."#
 
             std::io::stdin().read_line(&mut line).unwrap();
 
-            if let Ok(num) = line.parse::<usize>() {
+            if let Ok(num) = line.trim().parse::<usize>() {
                 if (1..=opts.len()).contains(&num) {
                     // Subtract one to turn the number into an index again.
                     break num - 1;
