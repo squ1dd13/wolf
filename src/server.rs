@@ -194,7 +194,11 @@ impl Game {
         let player_killed = self
             .players
             .iter_mut()
-            .filter(|p| !matches!(p.role(), Role::Wolf))
+            .filter(|p| match p.role() {
+                Role::Wolf => false,
+                _ if !p.dead => true,
+                _ => false,
+            })
             .nth(kill_num)
             .unwrap();
 
