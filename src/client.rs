@@ -5,23 +5,24 @@ use crate::comm::{CtsMessage, Role, StcMessage};
 pub fn start(addr: SocketAddr) {
     let mut stream = std::net::TcpStream::connect(addr).unwrap();
 
-    let msg = bincode::serialize(&crate::comm::CtsMessage::Text("Hello".to_string())).unwrap();
-    stream.write_all(&msg[..]).unwrap();
-
-    let resp: crate::comm::StcMessage = bincode::deserialize_from(&mut stream).unwrap();
-    println!("Got response: {:?}", resp);
+    let mut player = Player {
+        name: Player::input_name(),
+        role: None,
+        dead: false,
+        stream,
+    };
 }
 
 /// The user's player. Manages communication with the host.
 struct Player {
-    /// Whether the player has died.
-    dead: bool,
-
     /// The name chosen by the user.
     name: String,
 
     /// The player's role.
-    role: Role,
+    role: Option<Role>,
+
+    /// Whether the player has died.
+    dead: bool,
 
     /// The stream through which we communicate with the host.
     stream: std::net::TcpStream,
@@ -85,6 +86,21 @@ impl Player {
                     println!("{} was voted out by the other players.", name);
                 }
             }
+
+            StcMessage::RoleAssigned(role) => {
+                self.role = Some(role);
+
+                // Tell the player what their role is, and what they are supposed to do.
+                let (role_name, desc) = match role {
+                    Role::Wolf => ("werewolf", "Kill others and avoid detection."),
+                    Role::Villager => (
+                        "villager",
+                        "Do villager things, avoid being killed, and capture the werewolves.",
+                    ),
+                };
+
+                println!("Your role is {}. {}", role_name, desc);
+            }
         }
     }
 
@@ -105,6 +121,11 @@ impl Player {
     ///
     /// Returns the index of the person the player chooses to kill.
     fn ask_kill(&self, opts: Vec<String>) -> usize {
+        todo!()
+    }
+
+    /// Gets a valid player name from the user.
+    fn input_name() -> String {
         todo!()
     }
 }

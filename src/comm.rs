@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 
 /// The role of a player in the game.
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub enum Role {
     Wolf,
     Villager,
 }
 
 /// The side that won when the game is over.
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Debug)]
 pub enum Winner {
     Wolf,
     Village,
@@ -49,4 +51,7 @@ pub enum StcMessage {
 
     /// The name of the player who was just voted out.
     VotedOut(String),
+
+    /// The role assigned to the recipient player.
+    RoleAssigned(Role),
 }
