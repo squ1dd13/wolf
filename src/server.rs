@@ -103,7 +103,7 @@ impl Player {
 
     /// Returns the player's role. Panics if the role has not been assigned yet.
     fn role(&self) -> Role {
-        self.role.unwrap()
+        self.role.expect("No role given")
     }
 }
 
@@ -149,8 +149,8 @@ impl Game {
                 Role::Villager
             };
 
-            self.players[wolf_index].role = Some(role);
-            self.players[wolf_index].send(&StcMessage::RoleAssigned(role));
+            self.players[i].role = Some(role);
+            self.players[i].send(&StcMessage::RoleAssigned(role));
         }
     }
 
