@@ -33,8 +33,7 @@ fn main() {
 
     let game_address = if res.is_present("host") {
         // Hosting the game, so start a server.
-        server::start(port);
-        loop {}
+        server::start(port)
     } else {
         std::net::SocketAddr::new(res.value_of_t_or_exit("ip"), port)
     };

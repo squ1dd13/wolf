@@ -11,6 +11,8 @@ pub fn start(addr: SocketAddr) {
         dead: false,
         stream,
     };
+
+    player.play();
 }
 
 /// The user's player. Manages communication with the host.
@@ -31,6 +33,9 @@ struct Player {
 impl Player {
     /// Enters a loop of waiting for messages from the host and responding to them.
     fn play(&mut self) {
+        // The first message must be us sending the player's name across.
+        self.send(CtsMessage::Name(self.name.clone()));
+
         loop {
             let msg = bincode::deserialize_from(&mut self.stream).unwrap();
 
