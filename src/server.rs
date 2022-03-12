@@ -33,27 +33,22 @@ fn handle_stream(mut stream: std::net::TcpStream) {
     let mut buf = [0u8; 512];
 
     loop {
-        match stream.read(&mut buf) {
-            Ok(len) => {
-                // Read a single CTS (client-to-server) message.
-                let message: crate::comm::CtsMessage = bincode::deserialize(&buf[..len]).unwrap();
-                println!("Got {:?} from {}", message, stream.peer_addr().unwrap());
-
-                let response_bytes =
-                    bincode::serialize(&crate::comm::StcMessage::WolvesAwake).unwrap();
-
-                let _ = stream.write(&response_bytes[..]).unwrap();
-            }
-
+        let message: crate::comm::CtsMessage = match bincode::deserialize_from(&mut stream) {
+            Ok(v) => v,
             Err(err) => {
                 println!(
-                    "Error reading from stream for {}: {}; disconnecting",
+                    "Failed to read CTS message from {}: {}; disconnecting",
                     stream.peer_addr().unwrap(),
                     err
                 );
 
                 return;
             }
-        }
+        };
+
+        println!("Got {:?} from {}", message, stream.peer_addr().unwrap());
+
+        let response_bytes = bincode::serialize(&crate::comm::StcMessage::WolvesAwake).unwrap();
+        let _ = stream.write(&response_bytes[..]).unwrap();
     }
 }

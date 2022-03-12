@@ -5,4 +5,9 @@ pub fn start(addr: SocketAddr) {
 
     let msg = bincode::serialize(&crate::comm::CtsMessage::Text("Hello".to_string())).unwrap();
     stream.write_all(&msg[..]).unwrap();
+
+    let resp: crate::comm::StcMessage = bincode::deserialize_from(&mut stream).unwrap();
+    println!("Got response: {:?}", resp);
+
+    loop {}
 }
