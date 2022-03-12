@@ -1,9 +1,12 @@
 use std::{io::Write, net::SocketAddr};
 
 use crate::comm::{CtsMessage, Role, StcMessage, Winner};
+use parking_lot::Mutex;
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub fn start(addr: SocketAddr) {
     let mut player = Player {
+        output: Output::new(),
         name: Player::input_name(),
         role: None,
         dead: false,
@@ -13,8 +16,56 @@ pub fn start(addr: SocketAddr) {
     player.play();
 }
 
+struct Output {
+    stdout: Mutex<StandardStream>,
+}
+
+impl Output {
+    fn new() -> Output {
+        Output {
+            stdout: Mutex::new(StandardStream::stdout(ColorChoice::Always)),
+        }
+    }
+
+    fn write(&self, name: impl AsRef<str>) {
+        write!(self.stdout.lock(), "{}", name.as_ref()).unwrap();
+    }
+
+    fn set_fg(&self, colour: Color, bold: bool) {
+        self.stdout
+            .lock()
+            .set_color(ColorSpec::new().set_fg(Some(colour)).set_bold(bold))
+            .unwrap();
+    }
+
+    fn reset(&self) {
+        self.stdout.lock().reset().unwrap();
+    }
+
+    fn write_name(&self, name: impl AsRef<str>) {
+        self.set_fg(Color::Yellow, true);
+        self.write(name);
+        self.reset();
+    }
+
+    fn write_player(&self, msg: impl AsRef<str>) {
+        self.set_fg(Color::Green, false);
+        self.write(msg);
+        self.reset();
+    }
+
+    fn write_log(&self, msg: impl AsRef<str>) {
+        self.set_fg(Color::Blue, false);
+        self.write(msg);
+        self.reset();
+    }
+}
+
 /// The user's player. Manages communication with the host.
 struct Player {
+    /// The coloured output stream.
+    output: Output,
+
     /// The name chosen by the user.
     name: String,
 
@@ -39,13 +90,13 @@ impl Player {
 
             if let Some(winner) = self.handle_message(msg) {
                 match winner {
-                    Winner::Wolf => println!(
+                    Winner::Wolf => self.output.write_player(
                         r#"The werewolves win.
-The number of villagers remaining is equal to the number of werewolves."#
+The number of villagers remaining is equal to the number of werewolves."#,
                     ),
-                    Winner::Village => println!(
+                    Winner::Village => self.output.write_player(
                         r#"The villagers win.
-All of the werewolves have been killed."#
+All of the werewolves have been killed."#,
                     ),
                 }
 
@@ -58,21 +109,22 @@ All of the werewolves have been killed."#
     fn handle_message(&mut self, msg: StcMessage) -> Option<Winner> {
         match msg {
             StcMessage::WolvesWake => {
-                println!("The wolves wake.");
+                self.output.write_log("The wolves wake.\n");
                 self.send_ack();
             }
 
             StcMessage::NightFalls => {
-                println!("Night has fallen.");
+                self.output.write_log("Night has fallen.\n");
                 self.send_ack();
             }
 
             StcMessage::Died(name) => {
                 if name == self.name {
-                    println!("You were killed last night.");
+                    self.output.write_player("You were killed last night.\n");
                     self.dead = true;
                 } else {
-                    println!("{} was killed last night.", name);
+                    self.output.write_name(name);
+                    self.output.write_log(" was killed last night.\n");
                 }
 
                 self.send_ack();
@@ -89,21 +141,28 @@ All of the werewolves have been killed."#
             }
 
             StcMessage::AnnounceVote(name, against) => {
-                println!("{} voted against {}.", name, against);
+                self.output.write_name(name);
+                self.output.write_log(" voted against ");
+                self.output.write_name(against);
+                self.output.write_log(".\n");
+
                 self.send_ack();
             }
 
             StcMessage::NoMajority => {
-                println!("There was no majority vote.");
+                self.output.write_log("There was no majority vote.\n");
                 self.send_ack();
             }
 
             StcMessage::VotedOut(name) => {
                 if name == self.name {
-                    println!("You were voted out by the other players.");
+                    self.output
+                        .write_player("You were voted out by the other players.\n");
                     self.dead = true;
                 } else {
-                    println!("{} was voted out by the other players.", name);
+                    self.output.write_name(name);
+                    self.output
+                        .write_log(" was voted out by the other players.\n");
                 }
 
                 self.send_ack();
@@ -121,7 +180,11 @@ All of the werewolves have been killed."#
                     ),
                 };
 
-                println!("Your role is {}. {}", role_name, desc);
+                self.output
+                    .write_player(format!("Your role is {}.\n", role_name));
+                self.output.write(desc);
+                println!();
+
                 self.send_ack();
             }
 
@@ -129,16 +192,19 @@ All of the werewolves have been killed."#
 
             StcMessage::WaitingFor(name) => {
                 if name == self.name {
-                    println!("It's your turn to vote.");
+                    self.output.write_player("It's your turn to vote.\n");
                 } else {
-                    println!("Waiting for {} to vote.", name);
+                    self.output.write_log("Waiting for ");
+                    self.output.write_name(name);
+                    self.output.write_log(" to vote.\n");
                 }
 
                 self.send_ack();
             }
 
             StcMessage::AnnounceJoin(name) => {
-                println!("{} joined the game.", name);
+                self.output.write_name(name);
+                self.output.write_log(" joined the game.\n");
                 self.send_ack();
             }
         }
@@ -156,18 +222,24 @@ All of the werewolves have been killed."#
         bincode::serialize_into(&mut self.stream, &msg).unwrap();
     }
 
-    fn show_menu(title: impl AsRef<str>, prompt: impl AsRef<str>, opts: Vec<String>) -> usize {
+    fn show_menu(
+        &self,
+        title: impl AsRef<str>,
+        prompt: impl AsRef<str>,
+        opts: Vec<String>,
+    ) -> usize {
         let mut line = String::new();
 
         loop {
-            println!("{}", title.as_ref());
+            self.output.write_player(title.as_ref());
 
             for (i, name) in opts.iter().enumerate() {
-                println!("  [{}] {}", i + 1, name);
+                self.output.write(format!("  [{}] {}", i + 1, name));
             }
 
             println!();
-            print!("{} (1 to {}): ", prompt.as_ref(), opts.len());
+            self.output
+                .write_player(format!("{} (1 to {}): ", prompt.as_ref(), opts.len()));
             std::io::stdout().flush().unwrap();
 
             std::io::stdin().read_line(&mut line).unwrap();
@@ -179,7 +251,7 @@ All of the werewolves have been killed."#
                 }
             }
 
-            println!("Invalid input. Please try again.");
+            self.output.write("Invalid input. Please try again.");
             line.clear();
         }
     }
@@ -189,14 +261,14 @@ All of the werewolves have been killed."#
     ///
     /// Returns the index of the person the player votes against.
     fn ask_vote(&self, opts: Vec<String>) -> usize {
-        Self::show_menu("Who do you want to vote out?", "Your vote", opts)
+        self.show_menu("Who do you want to vote out?", "Your vote", opts)
     }
 
     /// Presents the user with a kill menu, given a vector of names of potential victims.
     ///
     /// Returns the index of the person the player chooses to kill.
     fn ask_kill(&self, opts: Vec<String>) -> usize {
-        Self::show_menu("Who do you want to kill?", "Your victim", opts)
+        self.show_menu("Who do you want to kill?", "Your victim", opts)
     }
 
     /// Gets a valid player name from the user.

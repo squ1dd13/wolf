@@ -455,4 +455,5 @@ dependencies = [
  "parking_lot",
  "rand",
  "serde",
+ "termcolor",
 ]
