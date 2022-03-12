@@ -3,13 +3,11 @@ use std::{io::Write, net::SocketAddr};
 use crate::comm::{CtsMessage, Role, StcMessage, Winner};
 
 pub fn start(addr: SocketAddr) {
-    let mut stream = std::net::TcpStream::connect(addr).unwrap();
-
     let mut player = Player {
         name: Player::input_name(),
         role: None,
         dead: false,
-        stream,
+        stream: std::net::TcpStream::connect(addr).unwrap(),
     };
 
     player.play();
@@ -140,19 +138,46 @@ All of the werewolves have been killed."#
         bincode::serialize_into(&mut self.stream, &msg).unwrap();
     }
 
+    fn show_menu(title: impl AsRef<str>, prompt: impl AsRef<str>, opts: Vec<String>) -> usize {
+        let mut line = String::new();
+
+        loop {
+            println!("{}", title.as_ref());
+
+            for (i, name) in opts.iter().enumerate() {
+                println!("  [{}] {}", i + 1, name);
+            }
+
+            println!();
+            print!("{} (1 to {}): ", prompt.as_ref(), opts.len());
+
+            std::io::stdin().read_line(&mut line).unwrap();
+
+            if let Ok(num) = line.parse::<usize>() {
+                if (1..=opts.len()).contains(&num) {
+                    // Subtract one to turn the number into an index again.
+                    break num - 1;
+                }
+            }
+
+            println!("Invalid input. Please try again.");
+            line.clear();
+        }
+    }
+
     /// Presents the user with a voting menu, given a vector of names of players that could be
     /// voted against.
     ///
     /// Returns the index of the person the player votes against.
     fn ask_vote(&self, opts: Vec<String>) -> usize {
-        todo!()
+        Self::show_menu("Who do you want to vote out?", "Your vote", opts)
     }
 
     /// Presents the user with a kill menu, given a vector of names of potential victims.
     ///
     /// Returns the index of the person the player chooses to kill.
     fn ask_kill(&self, opts: Vec<String>) -> usize {
-        todo!()
+        Self::show_menu("Who do you want to kill?", "Your victim", opts)
     }
 
     /// Gets a valid player name from the user.
@@ -160,11 +185,14 @@ All of the werewolves have been killed."#
         let mut name = String::new();
 
         loop {
+            print!("Please enter your name: ");
             std::io::stdin().read_line(&mut name).unwrap();
 
             let trimmed = name.trim();
 
             if trimmed.is_empty() {
+                println!("You can't have an empty name! Try again.");
+
                 name.clear();
                 continue;
             }
