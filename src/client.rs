@@ -43,7 +43,7 @@ impl Output {
     }
 
     fn write_name(&self, name: impl AsRef<str>) {
-        self.set_fg(Color::Yellow, true);
+        self.set_fg(Color::Blue, true);
         self.write(name);
         self.reset();
     }
@@ -55,9 +55,7 @@ impl Output {
     }
 
     fn write_log(&self, msg: impl AsRef<str>) {
-        self.set_fg(Color::Blue, false);
         self.write(msg);
-        self.reset();
     }
 }
 
