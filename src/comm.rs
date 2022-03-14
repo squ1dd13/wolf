@@ -14,10 +14,25 @@ pub enum Winner {
     Village,
 }
 
+/// A unique identifier for a player within a room.
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PlayerId(usize);
+
+impl PlayerId {
+    pub fn new() -> PlayerId {
+        PlayerId(0)
+    }
+
+    pub fn next(self) -> PlayerId {
+        PlayerId(self.0 + 1)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq, Debug)]
 pub enum CtsMessage {
-    /// The player's name. This should be sent immediately after a connection is made.
-    Name(String),
+    /// A message containing the player's name. This should be sent immediately after the client
+    /// connects to the server. The server should reply with the player's ID.
+    Connect(String),
 
     /// A vote against the player with the given index in the voting options that were sent to the
     /// player.
@@ -66,6 +81,12 @@ pub enum StcMessage {
     /// The host is waiting for a player to vote.
     WaitingFor(String),
 
-    /// The name of a player who just joined the game.
-    AnnounceJoin(String),
+    /// The ID-username pair for a player that just joined the game.
+    AnnounceJoin(PlayerId, String),
+
+    /// The ID assigned to a player who just joined.
+    IdAssigned(PlayerId),
+
+    /// An ID-username pair that identifies a certain player that is already in the game.
+    PlayerData(PlayerId, String),
 }

@@ -1,36 +1,32 @@
-use std::{io::Write, net::SocketAddr};
+use std::{collections::HashMap, io::Write, net::SocketAddr};
 
-use crate::comm::{CtsMessage, Role, StcMessage, Winner};
+use crate::comm::{CtsMessage, PlayerId, Role, StcMessage, Winner};
 use parking_lot::Mutex;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub fn start(addr: SocketAddr) {
-    let mut player = Player {
-        output: Output::new(),
-        name: Player::input_name(),
-        role: None,
-        dead: false,
-        stream: std::net::TcpStream::connect(addr).unwrap(),
-    };
-
-    player.play();
+    Player::new(Session::new(addr)).play();
 }
 
+/// A coloured output stream that abstracts semantic highlighting details.
 struct Output {
     stdout: Mutex<StandardStream>,
 }
 
 impl Output {
+    /// Creates a new coloured stdout stream.
     fn new() -> Output {
         Output {
             stdout: Mutex::new(StandardStream::stdout(ColorChoice::Always)),
         }
     }
 
+    /// Writes the given string to the stream.
     fn write(&self, name: impl AsRef<str>) {
         write!(self.stdout.lock(), "{}", name.as_ref()).unwrap();
     }
 
+    /// Sets the stream's foreground colour and whether the text is bold.
     fn set_fg(&self, colour: Color, bold: bool) {
         self.stdout
             .lock()
@@ -38,34 +34,68 @@ impl Output {
             .unwrap();
     }
 
+    /// Resets the stream's styling options.
     fn reset(&self) {
         self.stdout.lock().reset().unwrap();
     }
 
+    /// Writes a player name to the stream.
     fn write_name(&self, name: impl AsRef<str>) {
         self.set_fg(Color::Blue, true);
         self.write(name);
         self.reset();
     }
 
-    fn write_player(&self, msg: impl AsRef<str>) {
+    /// Writes information important to the user to the stream.
+    fn write_user(&self, msg: impl AsRef<str>) {
         self.set_fg(Color::Green, false);
         self.write(msg);
         self.reset();
     }
 
+    /// Writes general game information to the stream.
     fn write_log(&self, msg: impl AsRef<str>) {
         self.write(msg);
     }
 }
 
+/// A connection to a game room.
+struct Session {
+    /// The stream used to talk to room on the server.
+    stream: std::net::TcpStream,
+
+    /// The names of the players in the session.
+    players: HashMap<PlayerId, String>,
+}
+
+impl Session {
+    /// Creates a new `Session` by connecting to the given address over TCP.
+    fn new(addr: SocketAddr) -> Session {
+        Session {
+            stream: std::net::TcpStream::connect(addr).unwrap(),
+            players: HashMap::new(),
+        }
+    }
+
+    fn send(&mut self, msg: CtsMessage) {
+        bincode::serialize_into(&mut self.stream, &msg).unwrap();
+    }
+
+    fn receive(&mut self) -> StcMessage {
+        bincode::deserialize_from(&mut self.stream).unwrap()
+    }
+}
+
 /// The user's player. Manages communication with the host.
 struct Player {
-    /// The coloured output stream.
-    output: Output,
+    /// The ID of this player.
+    id: PlayerId,
 
     /// The name chosen by the user.
     name: String,
+
+    /// The coloured output stream.
+    output: Output,
 
     /// The player's role.
     role: Option<Role>,
@@ -73,26 +103,53 @@ struct Player {
     /// Whether the player has died.
     dead: bool,
 
-    /// The stream through which we communicate with the host.
-    stream: std::net::TcpStream,
+    /// The session that the player is currently in.
+    session: Session,
 }
 
 impl Player {
+    /// Creates a new player connected to the given session.
+    fn new(mut session: Session) -> Player {
+        // Ask the user for a name to connect with.
+        let name = Self::input_name();
+
+        // Ask to connect to the session with the name the user entered.
+        session.send(CtsMessage::Connect(name.clone()));
+
+        // The server should register the player with an ID and send it back so we can identify
+        // ourselves by ID. (The server uses the ID to identify players in messages, so we need to
+        // have one as soon as we connect.)
+        let id = match session.receive() {
+            StcMessage::IdAssigned(id) => id,
+            msg => panic!("Expected to receive player ID, but got {:?} instead", msg),
+        };
+
+        Player {
+            id,
+            name,
+            output: Output::new(),
+
+            // No role yet, since the server can only pick roles once all the players have
+            // joined and the game is about to start.
+            role: None,
+
+            dead: false,
+            session,
+        }
+    }
+
     /// Enters a loop of waiting for messages from the host and responding to them.
     fn play(&mut self) {
-        // The first message must be us sending the player's name across.
-        self.send(CtsMessage::Name(self.name.clone()));
-
         loop {
-            let msg = bincode::deserialize_from(&mut self.stream).unwrap();
+            let msg = bincode::deserialize_from(&mut self.session.stream).unwrap();
 
             if let Some(winner) = self.handle_message(msg) {
                 match winner {
-                    Winner::Wolf => self.output.write_player(
+                    Winner::Wolf => self.output.write_user(
                         r#"The werewolves win.
 The number of villagers remaining is equal to the number of werewolves."#,
                     ),
-                    Winner::Village => self.output.write_player(
+                    Winner::Village => self.output.write_user(
                         r#"The villagers win.
 All of the werewolves have been killed."#,
                     ),
@@ -118,7 +175,7 @@ All of the werewolves have been killed."#,
 
             StcMessage::Died(name) => {
                 if name == self.name {
-                    self.output.write_player("You were killed last night.\n");
+                    self.output.write_user("You were killed last night.\n");
                     self.dead = true;
                 } else {
                     self.output.write_name(name);
@@ -155,7 +212,7 @@ All of the werewolves have been killed."#,
             StcMessage::VotedOut(name) => {
                 if name == self.name {
                     self.output
-                        .write_player("You were voted out by the other players.\n");
+                        .write_user("You were voted out by the other players.\n");
                     self.dead = true;
                 } else {
                     self.output.write_name(name);
@@ -179,7 +236,7 @@ All of the werewolves have been killed."#,
                 };
 
                 self.output
-                    .write_player(format!("Your role is {}.\n", role_name));
+                    .write_user(format!("Your role is {}.\n", role_name));
                 self.output.write(desc);
                 println!();
 
@@ -190,7 +247,7 @@ All of the werewolves have been killed."#,
 
             StcMessage::WaitingFor(name) => {
                 if name == self.name {
-                    self.output.write_player("It's your turn to vote.\n");
+                    self.output.write_user("It's your turn to vote.\n");
                 } else {
                     self.output.write_log("Waiting for ");
                     self.output.write_name(name);
@@ -200,11 +257,20 @@ All of the werewolves have been killed."#,
                 self.send_ack();
             }
 
-            StcMessage::AnnounceJoin(name) => {
-                self.output.write_name(name);
+            StcMessage::AnnounceJoin(id, name) => {
+                self.output.write_name(&name);
                 self.output.write_log(" joined the game.\n");
                 self.send_ack();
+
+                self.session.players.insert(id, name);
             }
+
+            StcMessage::PlayerData(id, name) => {
+                // Register the player in our local table of player names and IDs.
+                self.session.players.insert(id, name);
+            }
+
+            msg => println!("Unhandled message {:?} in loop", msg),
         }
 
         None
@@ -217,7 +283,7 @@ All of the werewolves have been killed."#,
 
     /// Sends the given message to the host.
     fn send(&mut self, msg: CtsMessage) {
-        bincode::serialize_into(&mut self.stream, &msg).unwrap();
+        bincode::serialize_into(&mut self.session.stream, &msg).unwrap();
     }
 
     fn show_menu(
@@ -229,7 +295,7 @@ All of the werewolves have been killed."#,
         let mut line = String::new();
 
         loop {
-            self.output.write_player(title.as_ref());
+            self.output.write_user(title.as_ref());
 
             for (i, name) in opts.iter().enumerate() {
                 self.output.write(format!("  [{}] {}", i + 1, name));
@@ -237,7 +303,7 @@ All of the werewolves have been killed."#,
 
             println!();
             self.output
-                .write_player(format!("{} (1 to {}): ", prompt.as_ref(), opts.len()));
+                .write_user(format!("{} (1 to {}): ", prompt.as_ref(), opts.len()));
             std::io::stdout().flush().unwrap();
 
             std::io::stdin().read_line(&mut line).unwrap();
