@@ -85,6 +85,10 @@ impl Session {
     fn receive(&mut self) -> StcMessage {
         bincode::deserialize_from(&mut self.stream).unwrap()
     }
+
+    fn player_name(&self, id: PlayerId) -> &str {
+        self.players.get(&id).expect("No player found for given ID")
+    }
 }
 
 /// The user's player. Manages communication with the host.
@@ -177,12 +181,12 @@ All of the werewolves have been killed."#,
                 self.send_ack();
             }
 
-            StcMessage::Died(name) => {
-                if name == self.name {
+            StcMessage::Died(id) => {
+                if id == self.id {
                     self.output.write_user("You were killed last night.\n");
                     self.dead = true;
                 } else {
-                    self.output.write_name(name);
+                    self.output.write_name(self.session.player_name(id));
                     self.output.write_log(" was killed last night.\n");
                 }
 
@@ -199,10 +203,10 @@ All of the werewolves have been killed."#,
                 self.send(CtsMessage::Kill(kill));
             }
 
-            StcMessage::AnnounceVote(name, against) => {
-                self.output.write_name(name);
+            StcMessage::AnnounceVote(voter_id, against_id) => {
+                self.output.write_name(self.session.player_name(voter_id));
                 self.output.write_log(" voted against ");
-                self.output.write_name(against);
+                self.output.write_name(self.session.player_name(against_id));
                 self.output.write_log(".\n");
 
                 self.send_ack();
@@ -213,13 +217,13 @@ All of the werewolves have been killed."#,
                 self.send_ack();
             }
 
-            StcMessage::VotedOut(name) => {
-                if name == self.name {
+            StcMessage::VotedOut(id) => {
+                if id == self.id {
                     self.output
                         .write_user("You were voted out by the other players.\n");
                     self.dead = true;
                 } else {
-                    self.output.write_name(name);
+                    self.output.write_name(self.session.player_name(id));
                     self.output
                         .write_log(" was voted out by the other players.\n");
                 }
@@ -249,12 +253,12 @@ All of the werewolves have been killed."#,
 
             StcMessage::AnnounceWinner(winner) => return Some(winner),
 
-            StcMessage::WaitingFor(name) => {
-                if name == self.name {
+            StcMessage::WaitingFor(id) => {
+                if id == self.id {
                     self.output.write_user("It's your turn to vote.\n");
                 } else {
                     self.output.write_log("Waiting for ");
-                    self.output.write_name(name);
+                    self.output.write_name(self.session.player_name(id));
                     self.output.write_log(" to vote.\n");
                 }
 
@@ -294,14 +298,15 @@ All of the werewolves have been killed."#,
         &self,
         title: impl AsRef<str>,
         prompt: impl AsRef<str>,
-        opts: Vec<String>,
+        opts: Vec<PlayerId>,
     ) -> usize {
         let mut line = String::new();
 
         loop {
             self.output.write_user(title.as_ref());
 
-            for (i, name) in opts.iter().enumerate() {
+            for (i, &id) in opts.iter().enumerate() {
+                let name = self.session.player_name(id);
                 self.output.write(format!("  [{}] {}", i + 1, name));
             }
 
@@ -328,14 +333,14 @@ All of the werewolves have been killed."#,
     /// voted against.
     ///
     /// Returns the index of the person the player votes against.
-    fn ask_vote(&self, opts: Vec<String>) -> usize {
+    fn ask_vote(&self, opts: Vec<PlayerId>) -> usize {
         self.show_menu("Who do you want to vote out?", "Your vote", opts)
     }
 
     /// Presents the user with a kill menu, given a vector of names of potential victims.
     ///
     /// Returns the index of the person the player chooses to kill.
-    fn ask_kill(&self, opts: Vec<String>) -> usize {
+    fn ask_kill(&self, opts: Vec<PlayerId>) -> usize {
         self.show_menu("Who do you want to kill?", "Your victim", opts)
     }
 

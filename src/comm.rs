@@ -54,23 +54,23 @@ pub enum StcMessage {
     /// The game is entering a night.
     NightFalls,
 
-    /// The name of the player who died last night.
-    Died(String),
+    /// The ID of the player who died last night.
+    Died(PlayerId),
 
-    /// The names of the players that can be voted against.
-    VoteOptions(Vec<String>),
+    /// The IDs of the players that can be voted against.
+    VoteOptions(Vec<PlayerId>),
 
-    /// The names of the players that can be killed by a wolf.
-    KillOptions(Vec<String>),
+    /// The IDs of the players that can be killed by a wolf.
+    KillOptions(Vec<PlayerId>),
 
     /// Player A has voted against player B.
-    AnnounceVote(String, String),
+    AnnounceVote(PlayerId, PlayerId),
 
     /// There was not a majority on the vote.
     NoMajority,
 
-    /// The name of the player who was just voted out.
-    VotedOut(String),
+    /// The ID of the player who was just voted out.
+    VotedOut(PlayerId),
 
     /// The role assigned to the recipient player.
     RoleAssigned(Role),
@@ -79,7 +79,7 @@ pub enum StcMessage {
     AnnounceWinner(Winner),
 
     /// The host is waiting for a player to vote.
-    WaitingFor(String),
+    WaitingFor(PlayerId),
 
     /// The ID-username pair for a player that just joined the game.
     AnnounceJoin(PlayerId, String),
