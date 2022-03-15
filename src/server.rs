@@ -13,15 +13,18 @@ use crate::comm::{CtsMessage, PlayerId, Role, StcMessage, Winner};
 pub fn start(port: u16) -> SocketAddr {
     let addr = SocketAddr::new(IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), port);
 
+    // Create the listener on the calling thread so that this function blocks until the server is
+    // ready to listen for messages.
+    let listener = std::net::TcpListener::bind(addr).expect("Unable to start server");
+
     println!("Hosting on {}", addr);
 
-    std::thread::spawn(move || run_server(addr));
+    std::thread::spawn(move || run_server(listener));
+
     addr
 }
 
-fn run_server(addr: SocketAddr) {
-    let listener = std::net::TcpListener::bind(addr).expect("Unable to start server");
-
+fn run_server(listener: std::net::TcpListener) {
     let mut game = Game::new();
 
     for stream in listener.incoming() {
@@ -89,23 +92,33 @@ impl Player {
         // Get the game to generate a new ID for this player.
         let id = game.take_next_id();
 
-        // Create the new player and add them to the game.
-        game.add_player(Player {
+        let player = Player {
             id,
             stream: Mutex::new(stream),
             dead: false,
             name,
             role: None,
-        });
+        };
+
+        // Send the ID to the player's client so that they know what their own ID is.
+        player.send(&StcMessage::IdAssigned(id));
+
+        // Create the new player and add them to the game.
+        game.add_player(player);
     }
 
     /// Sends a message to the client.
     fn send(&self, msg: &StcMessage) -> CtsMessage {
+        println!("server sending: {:?}", msg);
+
         let mut stream = self.stream.lock();
         bincode::serialize_into(stream.deref_mut(), &msg).unwrap();
 
         // Every message sent from the host should prompt a response from the client.
-        bincode::deserialize_from(stream.deref_mut()).unwrap()
+        let resp = bincode::deserialize_from(stream.deref_mut()).unwrap();
+
+        println!("got back: {:?}", resp);
+        resp
     }
 
     /// Returns the player's role. Panics if the role has not been assigned yet.
@@ -149,7 +162,12 @@ impl Game {
         self.send_all(&StcMessage::AnnounceJoin(player.id, player.name.clone()));
 
         // Tell the new player about all the players who are already in the game.
-        // player.send(&StcMessage::ListPlayers(self.players));
+        player.send(&StcMessage::Players(
+            self.players
+                .iter()
+                .map(|(&id, p)| (id, p.name.clone()))
+                .collect(),
+        ));
 
         self.players.insert(player.id, player);
     }

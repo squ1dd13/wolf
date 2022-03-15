@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 pub fn start(addr: SocketAddr) {
+    println!("Connecting to {}", addr);
     Player::new(Session::new(addr)).play();
 }
 
@@ -123,6 +124,9 @@ impl Player {
             StcMessage::IdAssigned(id) => id,
             msg => panic!("Expected to receive player ID, but got {:?} instead", msg),
         };
+
+        // Acknowledge receipt of the ID.
+        session.send(CtsMessage::Received);
 
         Player {
             id,
@@ -265,9 +269,9 @@ All of the werewolves have been killed."#,
                 self.session.players.insert(id, name);
             }
 
-            StcMessage::PlayerData(id, name) => {
-                // Register the player in our local table of player names and IDs.
-                self.session.players.insert(id, name);
+            StcMessage::Players(map) => {
+                self.session.players.extend(map.into_iter());
+                self.send_ack();
             }
 
             msg => println!("Unhandled message {:?} in loop", msg),
@@ -315,7 +319,7 @@ All of the werewolves have been killed."#,
                 }
             }
 
-            self.output.write("Invalid input. Please try again.");
+            self.output.write("Invalid input. Please try again.\n");
             line.clear();
         }
     }

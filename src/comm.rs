@@ -87,6 +87,7 @@ pub enum StcMessage {
     /// The ID assigned to a player who just joined.
     IdAssigned(PlayerId),
 
-    /// An ID-username pair that identifies a certain player that is already in the game.
-    PlayerData(PlayerId, String),
+    /// A player IDs and usernames that should be sent to a newly-connected client so that they can
+    /// identify players by ID.
+    Players(Vec<(PlayerId, String)>),
 }
