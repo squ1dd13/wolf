@@ -299,7 +299,7 @@ All of the werewolves have been killed."#,
         title: impl AsRef<str>,
         prompt: impl AsRef<str>,
         opts: Vec<PlayerId>,
-    ) -> usize {
+    ) -> PlayerId {
         let mut line = String::new();
 
         loop {
@@ -319,8 +319,9 @@ All of the werewolves have been killed."#,
 
             if let Ok(num) = line.trim().parse::<usize>() {
                 if (1..=opts.len()).contains(&num) {
-                    // Subtract one to turn the number into an index again.
-                    break num - 1;
+                    // Subtract one to turn the number into an index again, then find the ID the
+                    // player is referring to.
+                    break opts[num - 1];
                 }
             }
 
@@ -332,15 +333,15 @@ All of the werewolves have been killed."#,
     /// Presents the user with a voting menu, given a vector of names of players that could be
     /// voted against.
     ///
-    /// Returns the index of the person the player votes against.
-    fn ask_vote(&self, opts: Vec<PlayerId>) -> usize {
+    /// Returns the ID of the person the player votes against.
+    fn ask_vote(&self, opts: Vec<PlayerId>) -> PlayerId {
         self.show_menu("Who do you want to vote out?", "Your vote", opts)
     }
 
     /// Presents the user with a kill menu, given a vector of names of potential victims.
     ///
-    /// Returns the index of the person the player chooses to kill.
-    fn ask_kill(&self, opts: Vec<PlayerId>) -> usize {
+    /// Returns the ID of the person the player chooses to kill.
+    fn ask_kill(&self, opts: Vec<PlayerId>) -> PlayerId {
         self.show_menu("Who do you want to kill?", "Your victim", opts)
     }
 

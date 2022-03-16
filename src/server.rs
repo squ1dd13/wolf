@@ -147,10 +147,10 @@ impl Game {
         self.assign_roles();
 
         loop {
-            let killed_name = self.play_night();
+            let killed_id = self.play_night();
 
             // Play one day, and if either side wins, report that and end the game.
-            if let Some(winning_side) = self.play_day(killed_name) {
+            if let Some(winning_side) = self.play_day(killed_id) {
                 self.send_all(&StcMessage::AnnounceWinner(winning_side));
                 break;
             }
@@ -207,9 +207,8 @@ impl Game {
         }
     }
 
-    /// Plays through one night in the game, returning the name of the player killed by the
-    /// werewolf.
-    fn play_night(&mut self) -> String {
+    /// Plays through one night in the game, returning the ID of the player killed by the werewolf.
+    fn play_night(&mut self) -> PlayerId {
         // Tell all the players that night has fallen.
         self.send_all(&StcMessage::NightFalls);
 
@@ -224,52 +223,43 @@ impl Game {
             .unwrap();
 
         // Find the non-wolf players. These are the players that can be killed by the wolf.
-        let kill_names: Vec<String> = self
+        let kill_candidates: Vec<PlayerId> = self
             .players
             .values()
             .filter_map(|p| match p.role() {
                 Role::Wolf => None,
-                _ if !p.dead => Some(p.name.clone()),
+                _ if !p.dead => Some(p.id),
                 _ => None,
             })
             .collect();
 
         // Send the wolf the list of players that they can kill. This should trigger their client
         // to ask them for and send back their choice of player.
-        let response = wolf.send(&StcMessage::KillOptions(kill_names.clone()));
+        let response = wolf.send(&StcMessage::KillOptions(kill_candidates.clone()));
 
-        let kill_num = match response {
-            CtsMessage::Kill(num) => num,
+        let kill_id = match response {
+            CtsMessage::Kill(id) => id,
             msg => {
                 // We shouldn't get anything else here, so panic if we do.
                 panic!("Expected kill message from wolf, but got {:?} instead", msg);
             }
         };
 
-        // Get a reference to the player that the wolf is killing.
-        let player_killed = self
-            .players
-            .values_mut()
-            .filter(|p| match p.role() {
-                Role::Wolf => false,
-                _ if !p.dead => true,
-                _ => false,
-            })
-            .nth(kill_num)
-            .unwrap();
-
-        if player_killed.name != kill_names[kill_num] {
+        if !kill_candidates.contains(&kill_id) {
             panic!(
-                "Player name mismatch: {} killed, but index gives {} from original vec",
-                player_killed.name, kill_names[kill_num]
+                "Wolf attempted to kill non-candidate {}",
+                self.players.get(&kill_id).unwrap().name
             );
         }
+
+        // Get a reference to the player the wolf is killing.
+        let player_killed = self.players.get_mut(&kill_id).unwrap();
 
         // Kill them.
         player_killed.dead = true;
 
-        // Return the name of the killed player for use in the day phase.
-        player_killed.name.clone()
+        // Return the ID of the killed player for use in the day phase.
+        kill_id
     }
 
     /// Plays through one day in the game, given the name of the player that was killed the night
@@ -277,16 +267,16 @@ impl Game {
     ///
     /// If this day ends the game, the winning side will be returned. Otherwise, `None` will be
     /// returned.
-    fn play_day(&mut self, killed_name: String) -> Option<Winner> {
-        // Tell all the players who died.
-        self.send_all(&StcMessage::Died(killed_name));
+    fn play_day(&mut self, killed_id: PlayerId) -> Option<Winner> {
+        // Tell all the players which one died.
+        self.send_all(&StcMessage::Died(killed_id));
 
         // Find all the living players. These are the players who will get a vote, and who can be
         // voted against by other players.
         let living = self.players.values().filter(|p| !p.dead);
 
         // Get the names of all the players that can be voted against.
-        let vote_names: Vec<_> = living.clone().map(|p| p.name.clone()).collect();
+        let candidates: Vec<_> = living.clone().map(|p| p.id).collect();
 
         // Create a vector from the iterator of living players so we don't need to keep cloning the
         // iterator.
@@ -294,21 +284,18 @@ impl Game {
 
         // We don't want to allow a player to vote multiple times, so store votes in a hashmap to
         // ensure that there is only one vote per player ID.
-        let mut votes = HashMap::<String, usize>::new();
+        let mut votes = HashMap::<String, PlayerId>::new();
 
         for player in &living {
             // Say who we're waiting for so players can tell others that they need to vote.
-            self.send_all(&StcMessage::WaitingFor(player.name.clone()));
+            self.send_all(&StcMessage::WaitingFor(player.id));
 
-            let response = player.send(&StcMessage::VoteOptions(vote_names.clone()));
+            let response = player.send(&StcMessage::VoteOptions(candidates.clone()));
 
             match response {
                 CtsMessage::Vote(vote) => {
                     // Tell all the players about the vote.
-                    self.send_all(&StcMessage::AnnounceVote(
-                        player.name.clone(),
-                        living[vote].name.clone(),
-                    ));
+                    self.send_all(&StcMessage::AnnounceVote(player.id, vote));
 
                     // Record the vote.
                     votes.insert(player.name.clone(), vote);
@@ -320,50 +307,54 @@ impl Game {
             };
         }
 
-        // Count the votes by making a new hashmap with the player index as a key, and the number
-        // of votes they have received as the value.
-        let mut vote_counts = HashMap::<usize, usize>::new();
+        // Count the votes by making a new hashmap with the player ID as a key, and the number of
+        // votes they have received as the value.
+        let mut vote_counts = HashMap::<PlayerId, usize>::new();
 
         for (_, player_index) in votes {
             *vote_counts.entry(player_index).or_default() += 1;
         }
 
         // Find the player with the most votes.
-        let (&voted_index, &num_votes) = vote_counts.iter().max_by_key(|(_, &num)| num).unwrap();
+        let (&voted_id, &num_votes) = vote_counts.iter().max_by_key(|(_, &num)| num).unwrap();
 
         // Check if the vote has a majority (i.e. whether more than half of the players agreed).
         if num_votes > (living.len() / 2) {
             // Majority vote, so the person should die.
-            self.send_all(&StcMessage::VotedOut(living[voted_index].name.clone()));
+            self.send_all(&StcMessage::VotedOut(voted_id));
 
             // Drop the living players vector so we can get a mutable reference to the player and
             // kill them. (We need to drop the immutable references first, or we'd be mutably
             // borrowing the players when there are still immutable references around.)
             drop(living);
 
-            let mut living_mut: Vec<_> = self.players.values_mut().filter(|p| !p.dead).collect();
-
             // Get a mutable reference to the player who has been voted out.
-            let voted: &mut _ = living_mut[voted_index];
+            let voted = self.players.get_mut(&voted_id).unwrap();
 
             // Kill them.
             voted.dead = true;
-
-            if let Role::Wolf = voted.role() {
-                // The village wins, because the wolf was killed.
-                return Some(Winner::Village);
-            } else if living_mut.len() == 2 {
-                // The wolves win, because the number of wolves left is equal to the number of
-                // villagers left (one wolf and one villager).
-                return Some(Winner::Wolf);
-            }
-
-            // Nobody wins yet, so the game will continue into another night.
         } else {
             self.send_all(&StcMessage::NoMajority);
         }
 
-        None
+        // Count wolves and villagers to see if the game has ended.
+        let (wolves, villagers) =
+            self.players
+                .values()
+                .fold((0, 0), |(w, v), p| match p.role.unwrap() {
+                    Role::Wolf => (w + 1, v),
+                    Role::Villager => (w, v + 1),
+                });
+
+        if wolves == villagers {
+            // If there are as many wolves as there are villagers, the wolves win.
+            Some(Winner::Wolf)
+        } else if wolves == 0 {
+            // If the villagers have killed all the wolves, the village wins.
+            Some(Winner::Village)
+        } else {
+            None
+        }
     }
 
     /// Sends the given message to every player.

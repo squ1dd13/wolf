@@ -34,12 +34,11 @@ pub enum CtsMessage {
     /// connects to the server. The server should reply with the player's ID.
     Connect(String),
 
-    /// A vote against the player with the given index in the voting options that were sent to the
-    /// player.
-    Vote(usize),
+    /// A vote against the player with the given ID.
+    Vote(PlayerId),
 
-    /// A wolf's chosen victim. The number is an index in the list of names they were sent.
-    Kill(usize),
+    /// A wolf's victim's ID.
+    Kill(PlayerId),
 
     /// Acknowledges receipt of a message from the server. The server should wait to receive this
     /// before sending any more messages to ensure that everything is sent in order.
